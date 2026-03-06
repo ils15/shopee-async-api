@@ -1,0 +1,11 @@
+🔑 Credenciais carregadas com sucesso. Testando a API do Shopee...
+
+1️⃣ Testando Endpoint: generate_short_link
+✅ Link curto gerado: https://s.shopee.com.br/20qVXvzpYM
+
+2️⃣ Testando Endpoint: get_shopee_offer_list (Top 3 Ofertas)
+  - Oferta 1: New BAU Comm - Health (Comissão: 0.03)
+  - Oferta 2: New BAU Comm - Fashion Accessories (Comissão: 0.03)
+  - Oferta 3: New BAU Comm - Home Appliances (Comissão: 0.03)
+
+🚀 Todos os testes preliminares concluídos com sucesso!
