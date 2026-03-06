@@ -2,33 +2,119 @@ name: Publish to PyPI
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - master
 
 jobs:
-  build-and-publish:
+  # ── 1. TEST MATRIX ────────────────────────────────────────────────────────
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-        
-    - name: Install build dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install build twine
-        
-    - name: Build package
-      run: python -m build
-      
-    - name: Check package
-      run: twine check dist/*
-      
-    - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+  # ── 2. DEPLOY ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Bump · Changelog · Build · Publish
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install build twine
+
+      # VERSION BUMP
+      - name: Bump version (semantic)
+        id: version
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          export GIT_COMMIT_MESSAGE="$COMMIT_MSG"
+          python scripts/bump_version.py
+
+      # CHANGELOG
+      - name: Finalize changelog
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/finalize_changelog.py
+
+      # BUILD
+      - name: Build package
+        if: steps.version.outputs.should_publish == 'true'
+        run: python -m build
+
+      - name: Verify package
+        if: steps.version.outputs.should_publish == 'true'
+        run: twine check dist/*
+
+      # PUBLISH TO PyPI
+      - name: Publish to PyPI
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
+
+      # GITHUB RELEASE
+      - name: Create GitHub Release
+        if: steps.version.outputs.should_publish == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # COMMIT chore(release) BACK TO MASTER
+      - name: Commit release files
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git add pyproject.toml shopee_async_api/__init__.py CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin master
+
+      - name: Publish notification
+        if: steps.version.outputs.should_publish == 'true'
+        run: |
+          echo "✅ Published v${{ steps.version.outputs.version }} to PyPI"
+          echo "📦 pip install shopee-async-api==${{ steps.version.outputs.version }}"

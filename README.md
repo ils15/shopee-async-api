@@ -1,45 +1,50 @@
 # Shopee Async API
 
+[![Tests](https://github.com/ils15/shopee-async-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ils15/shopee-async-api/actions/workflows/ci.yml)
+[![Publish](https://github.com/ils15/shopee-async-api/actions/workflows/publish.yml/badge.svg)](https://github.com/ils15/shopee-async-api/actions/workflows/publish.yml)
+[![PyPI](https://img.shields.io/pypi/v/shopee-async-api.svg)](https://pypi.org/project/shopee-async-api/)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A modern, fast, and fully asynchronous Python wrapper for the **Shopee Affiliate Open API**.
 
-![PyPI version](https://img.shields.io/pypi/v/shopee-async-api)
-![Python Versions](https://img.shields.io/pypi/pyversions/shopee-async-api)
-![License](https://img.shields.io/github/license/ils15/shopee-async-api)
+## ✨ Features
 
-## Features
+- ⚡️ **Asynchronous First**: Built natively with `httpx` and `asyncio` for maximum performance and non-blocking I/O.
+- 🔐 **Type Safety**: Fully type-hinted and uses `Pydantic` v2 for advanced data validation.
+- 🔑 **Developer Friendly**: Simplifies Shopee's complex SHA256 Authentication logic dynamically.
+- 📡 **Comprehensive GraphQL**: Wraps the GraphQL schemas safely, allowing easy integration with Python logic.
+- 🛡️ **Custom Exceptions**: Structured error handling for all Shopee API error codes.
 
-- **Asynchronous First**: Built natively with `httpx` and `asyncio` for maximum performance and non-blocking I/O.
-- **Type Safety**: Fully type-hinted and uses `Pydantic` for advanced data validation.
-- **Developer Friendly**: Simplifies Shopee's complex SHA256 Authentication logic dynamically.
-- **Comprehensive GraphQL**: Wraps the GraphQL schemas safely, allowing easy integration with Python logic.
+## 📡 Supported Endpoints
 
-## Supported Endpoints
-
-### Links
+**Links**
 - `generate_short_link`: Generate a single affiliate tracking link for any Shopee product.
 - `generate_batch_short_link`: Generate multiple affiliate tracking links in one request.
 
-### Offers
+**Offers**
 - `get_shopee_offer_list`: Get platform-wide top commission offers.
 - `get_shop_offer_list`: Get specific shop offers and banners.
 - `get_product_offer_list`: Get targeted product commissions.
 
-### Reports
+**Reports**
 - `get_conversion_report`: Get detailed reports linking user purchases and earned commissions.
 - `get_validated_report`: Get validated (approved) commission reports by validation ID.
 - `get_partner_order_report`: Get partner-level order reports with cursor-based pagination.
 
-### Product Feeds
+**Product Feeds**
 - `list_item_feeds`: List available product data feeds (full or delta mode).
 - `get_item_feed_data`: Stream rows from a product data feed by feed ID.
 
-## Installation
+## 📦 Installation
 
 ```bash
 pip install shopee-async-api
 ```
 
-## Quick Start
+**Requires Python 3.8+**
+
+## 🚀 Quick Start
 
 ```python
 import asyncio
@@ -67,14 +72,36 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Advanced Usage
+## 📖 Advanced Usage
 
-See [QUICK_START.md](QUICK_START.md) for detailed workflows on API pagination, exception handling, and custom error types limits.
+See [QUICK_START.md](QUICK_START.md) for detailed workflows on API pagination, exception handling, and custom error types.
 
-## Contributing
+## 🛠️ Development & Testing
+
+We use `pytest` for testing with full async support.
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ils15/shopee-async-api.git
+   cd shopee-async-api
+   ```
+
+2. Install dev dependencies:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+3. Run tests:
+   ```bash
+   pytest --cov=shopee_async_api tests/
+   ```
+
+## 🤝 Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to set up your environment, write tests, and submit pull requests.
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
