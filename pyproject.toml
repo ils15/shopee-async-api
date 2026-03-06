@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shopee-async-api"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
   { name="ils15", email="support@ils15.com" },
 ]
