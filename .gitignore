@@ -37,3 +37,6 @@ htmlcov/
 # IDEs
 .vscode/
 .idea/
+
+# Copilot agents (local only)
+.github/agents/

@@ -1,0 +1,56 @@
+name: Auto-format (Black + isort)
+
+# Runs on every push to develop or master.
+# Applies Black + isort in-place and commits back if anything changed.
+# Uses [skip ci] to avoid triggering a new pipeline on the format commit.
+# Does NOT run on pull_request events (can't push to a fork's branch).
+
+on:
+  push:
+    branches: [develop, master]
+
+jobs:
+  autoformat:
+    name: Black + isort auto-fix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to push the format commit back
+
+    env:
+      PKG_NAME: "shopee_async_api"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Check out the actual branch (not a detached HEAD) so we can push
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install formatters
+        run: pip install black isort --quiet
+
+      - name: Run Black
+        run: black ${{ env.PKG_NAME }} tests
+
+      - name: Run isort
+        run: isort ${{ env.PKG_NAME }} tests
+
+      - name: Commit & push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          if git diff --quiet; then
+            echo "✅ Nothing to format — already clean."
+          else
+            git add ${{ env.PKG_NAME }} tests
+            git commit -m "style(autoformat): apply Black + isort [skip ci]"
+            git push origin ${{ github.ref_name }}
+            echo "✅ Format commit pushed."
+          fi

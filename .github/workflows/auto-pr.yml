@@ -1,0 +1,299 @@
+name: Auto Release PR (develop -> master)
+
+# Triggered on every push to develop.
+# 1. Reads the actual code diff since last master sync
+# 2. Calls GitHub Models API (gpt-5-mini) to classify the change type
+# 3. Falls back to file-pattern heuristic if AI is unavailable
+# 4. Skips if only docs/tests/CI changed (nothing publishable)
+# 5. Creates (or updates) a PR develop -> master with label + full commit list
+# 6. Posts a comment with @iris / @temis agent instructions
+# NO conventional commit format required in commit messages.
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  auto-pr:
+    name: Analyze & open release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      models: read        # GitHub Models API (gpt-5-mini)
+
+    steps:
+      # --- 1. CHECKOUT ---
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history needed for git log comparisons
+
+      # --- 2. FETCH MASTER REF ---
+      - name: Fetch master branch
+        run: git fetch origin master --depth=100 2>/dev/null || true
+
+      # --- 3. ENSURE LABELS EXIST ---
+      - name: Ensure PR labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "enhancement"     --color "0075ca" --description "New feature or request"   --force 2>/dev/null || true
+          gh label create "bug"             --color "d73a4a" --description "Something isn't working"  --force 2>/dev/null || true
+          gh label create "refactor"        --color "e4e669" --description "Code refactoring"         --force 2>/dev/null || true
+          gh label create "breaking-change" --color "b60205" --description "Breaking API change"      --force 2>/dev/null || true
+          gh label create "documentation"   --color "0052cc" --description "Docs only"                --force 2>/dev/null || true
+          gh label create "test"            --color "bfd4f2" --description "Tests only"               --force 2>/dev/null || true
+          gh label create "chore"           --color "ffffff" --description "CI / build changes"       --force 2>/dev/null || true
+          gh label create "auto-pr"         --color "ededed" --description "Auto-generated PR"        --force 2>/dev/null || true
+
+      # --- 4. AI-POWERED CHANGE CLASSIFICATION ---
+      - name: Classify changes (AI + heuristic fallback)
+        id: analysis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'PYEOF'
+          import subprocess, json, urllib.request, os, sys
+
+          def git(*args):
+              return subprocess.run(['git'] + list(args), capture_output=True, text=True).stdout.strip()
+
+          def out(k, v):
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"{k}={v}\n")
+
+          # ---- Files changed since master ----
+          all_files = git('diff', 'origin/master..HEAD', '--name-only').splitlines()
+          if not all_files:
+              out('skip', 'true'); sys.exit(0)
+
+          # Publishable = anything that is not tests / docs / CI
+          boring = lambda f: (
+              any(f.startswith(p) for p in ['tests/', 'docs/', '.github/'])
+              or f.endswith(('.md', '.txt', '.rst', '.cfg'))
+          )
+          sig_files = [f for f in all_files if not boring(f)]
+          if not sig_files:
+              out('skip', 'true'); sys.exit(0)
+
+          out('skip', 'false')
+
+          commits   = git('log', 'origin/master..HEAD', '--pretty=format:%s')
+          diff_code = git('diff', 'origin/master..HEAD', '--unified=2', '--', *sig_files[:10])[:5000]
+
+          # ---- GitHub Models API (gpt-4o-mini) ----
+          ai_type = None
+          source  = 'heuristic'
+          token   = os.environ.get('GH_TOKEN', '')
+
+          system_prompt = (
+              "You are an expert CI/CD AI agent specialized in Semantic Versioning (SemVer) for Python libraries.\n"
+              "Your sole task is to analyze a git diff and commit history, then classify the change to determine the version bump.\n\n"
+              "Respond with EXACTLY ONE WORD from the list below. Do not include any punctuation, markdown formatting, or explanations.\n\n"
+              "Categories (in order of priority - always choose the highest applicable priority):\n"
+              "1. 'breaking' - Existing public API removed, renamed, or function signatures changed. Incompatible updates.\n"
+              "2. 'feat'     - New public endpoint, class, method, or user-visible feature added.\n"
+              "3. 'fix'      - Bug fixed, incorrect behavior patched, or new exception handling added.\n"
+              "4. 'refactor' - Internal code restructuring, performance improvements. No changes to the public API.\n"
+              "5. 'docs'     - ONLY documentation, tests, or CI/CD workflow files changed.\n\n"
+              "Strict Rules:\n"
+              "- If the diff contains both a bug fix and a breaking change, output 'breaking'.\n"
+              "- If the diff contains both a refactor and a new feature, output 'feat'.\n"
+              "- Pay special attention to `*.py` files. Changes to `tests/` or `.github/` without changes to core `*.py` files should be 'docs'."
+          )
+          user_msg = (
+              f"Analyze the following changes and provide the single-word classification.\n\n"
+              f"Changed files: {', '.join(sig_files[:20])}\n\n"
+              f"Commits:\n{commits[:400]}\n\n"
+              f"Git Diff:\n{diff_code}"
+          )
+          payload = json.dumps({
+              "model": "gpt-5-mini",
+              "messages": [
+                  {"role": "system", "content": system_prompt},
+                  {"role": "user",   "content": user_msg}
+              ],
+              "max_tokens": 5,
+              "temperature": 0
+          }).encode()
+
+          try:
+              req = urllib.request.Request(
+                  'https://models.inference.ai.azure.com/chat/completions',
+                  data=payload,
+                  headers={'Authorization': f'Bearer {token}',
+                           'Content-Type': 'application/json'},
+                  method='POST'
+              )
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  body = json.loads(resp.read())
+                  candidate = body['choices'][0]['message']['content'].strip().lower().split()[0]
+                  if candidate in ('feat', 'fix', 'refactor', 'breaking', 'docs'):
+                      ai_type = candidate
+                      source  = 'AI (gpt-5-mini)'
+                      print(f'::notice::AI classified change as: {ai_type}')
+          except Exception as e:
+              print(f'::warning::AI classification unavailable ({e}), using heuristic fallback')
+
+          # ---- Heuristic fallback ----
+          if not ai_type:
+              new_pkg = git('diff', 'origin/master..HEAD', '--diff-filter=A', '--name-only').splitlines()
+              new_pkg = [f for f in new_pkg if not boring(f)]
+              ai_type = 'feat' if new_pkg else 'fix'
+
+          # docs-only -> skip
+          if ai_type == 'docs':
+              out('skip', 'true'); sys.exit(0)
+
+          mapping = {
+              'breaking': ('breaking-change', '💥', 'MAJOR'),
+              'feat':     ('enhancement',     '✨', 'MINOR'),
+              'fix':      ('bug',             '🐛', 'PATCH'),
+              'refactor': ('refactor',        '♻️', 'PATCH'),
+          }
+          label, emoji, bump = mapping.get(ai_type, ('enhancement', '✨', 'MINOR'))
+
+          out('type',   ai_type)
+          out('label',  label)
+          out('emoji',  emoji)
+          out('bump',   bump)
+          out('source', source)
+
+          latest = git('log', '-1', '--pretty=format:%s')
+          out('latest_commit', latest)
+
+          commit_lines = git('log', 'origin/master..HEAD', '--pretty=format:- `%h` %s').splitlines()
+          out('commit_count', str(len(commit_lines)))
+
+          # Build PR body
+          sep = "---"
+          body  = f"## {emoji} Automated Release PR\n\n"
+          body += f"_Auto-generated by CI. Classified by: **{source}**_\n"
+          body += "⚡ **Auto-merge is enabled** — this PR will merge automatically once all CI checks pass.\n"
+          body += "_To review before merging, run `gh pr merge --disable-auto <number>` or disable it in the PR UI._\n\n"
+          body += sep + "\n\n"
+          body += "### Summary\n"
+          body += "| | |\n|---|---|\n"
+          body += f"| Change type | `{ai_type}` |\n"
+          body += f"| Version bump | **{bump}** |\n"
+          body += f"| Commits | {len(commit_lines)} |\n"
+          body += f"| Classified by | {source} |\n\n"
+          body += "### Changed files\n"
+          body += "\n".join(f"- `{f}`" for f in all_files[:30])
+          body += "\n\n### Commits\n"
+          body += "\n".join(commit_lines[:30])
+          body += "\n\n" + sep + "\n\n### Pre-merge checklist\n"
+          body += "- [ ] All CI tests pass\n"
+          body += "- [ ] Coverage >= 80 %\n"
+          body += "- [ ] `CHANGELOG.md` updated under `[Unreleased]`\n"
+          body += "- [ ] No hardcoded credentials\n\n"
+          body += sep + "\n\n"
+          body += "_Auto PR by CI. Use `@iris` to manage this PR, `@temis` to review._"
+
+          with open('/tmp/pr_body.md', 'w') as f:
+              f.write(body)
+
+          PYEOF
+
+      # --- 5. CHECK FOR EXISTING OPEN PR ---
+      - name: Check for existing open PR
+        id: existing
+        if: steps.analysis.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NUMBER=$(gh pr list \
+            --base master \
+            --head develop \
+            --state open \
+            --json number \
+            --jq '.[0].number // ""')
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+
+      # --- 6a. CREATE PR ---
+      - name: Create release PR
+        id: create-pr
+        if: steps.analysis.outputs.skip == 'false' && steps.existing.outputs.number == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="${{ steps.analysis.outputs.emoji }} ${{ steps.analysis.outputs.type }}: ${{ steps.analysis.outputs.latest_commit }}"
+          NUMBER=$(gh pr create \
+            --base master \
+            --head develop \
+            --title "$TITLE" \
+            --body-file /tmp/pr_body.md \
+            --label "${{ steps.analysis.outputs.label }}" \
+            --label "auto-pr" \
+            --no-maintainer-edit \
+            | grep -oE '[0-9]+$')
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "✅ PR #${NUMBER} created"
+
+      # --- 6b. UPDATE EXISTING PR ---
+      - name: Update existing PR
+        if: steps.analysis.outputs.skip == 'false' && steps.existing.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="${{ steps.analysis.outputs.emoji }} ${{ steps.analysis.outputs.type }}: ${{ steps.analysis.outputs.latest_commit }}"
+          gh pr edit ${{ steps.existing.outputs.number }} \
+            --title "$TITLE" \
+            --body-file /tmp/pr_body.md \
+            --add-label "${{ steps.analysis.outputs.label }}"
+          echo "🔄 PR #${{ steps.existing.outputs.number }} updated"
+
+      # --- 7. REQUEST COPILOT REVIEW ---
+      - name: Request Copilot review
+        if: steps.analysis.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR="${{ steps.create-pr.outputs.number || steps.existing.outputs.number }}"
+          if [ -n "$PR" ]; then
+            cat > /tmp/review_comment.md << 'EOF'
+          ⚡ **Auto-merge is enabled.** This PR will merge into `master` automatically once all CI checks pass.
+
+          To cancel auto-merge and review manually:
+          ```
+          gh pr merge --disable-auto $PR
+          ```
+
+          Use `@iris` in Copilot Chat to manage this PR (merge, update, close).
+          Use `@temis` in Copilot Chat to run a code review.
+          EOF
+            gh pr comment "$PR" --body-file /tmp/review_comment.md 2>/dev/null \
+              && echo "💬 Agent instructions comment added to PR #${PR}" \
+              || echo "⚠️  Could not add PR comment (skipped)"
+          fi
+
+      # --- 8. ENABLE AUTO-MERGE ---
+      - name: Enable auto-merge
+        if: steps.analysis.outputs.skip == 'false' && steps.create-pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR="${{ steps.create-pr.outputs.number }}"
+          gh pr merge "$PR" --auto --squash \
+            && echo "⚡ Auto-merge enabled for PR #${PR}" \
+            || echo "⚠️  Could not enable auto-merge — ensure Settings → General → ✅ Allow auto-merge is on"
+
+      # --- 9. SUMMARY ---
+      - name: Job summary
+        if: always()
+        run: |
+          if [ "${{ steps.analysis.outputs.skip }}" == "true" ]; then
+            echo "## ⏭️ No release PR needed" >> "$GITHUB_STEP_SUMMARY"
+            echo "No significant commits (feat/fix/refactor) found since master." >> "$GITHUB_STEP_SUMMARY"
+          else
+            PR="${{ steps.create-pr.outputs.number || steps.existing.outputs.number }}"
+            echo "## ${{ steps.analysis.outputs.emoji }} Release PR ready" >> "$GITHUB_STEP_SUMMARY"
+            echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| PR | #${PR} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Type | \`${{ steps.analysis.outputs.type }}\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Version bump | **${{ steps.analysis.outputs.bump }}** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Copilot review | requested |" >> "$GITHUB_STEP_SUMMARY"
+          fi

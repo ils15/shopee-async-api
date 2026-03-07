@@ -1,28 +1,31 @@
 import json
+from typing import Any, Dict, List, Optional
+
 import httpx
-from typing import Optional, Dict, Any, List
 
 from .auth import get_auth_headers
-from .exceptions import handle_api_error, ShopeeAPIError
+from .exceptions import ShopeeAPIError, handle_api_error
 from .models import (
-    GraphQLResponse,
-    GenerateShortLinkInput,
-    ShortLinkResult,
     BatchShortLinkResult,
+    ConversionReportConnection,
+    GenerateShortLinkInput,
+    GraphQLResponse,
+    ItemFeedDataConnection,
+    ItemFeedListConnection,
+    PartnerOrderReportConnection,
+    ProductOfferConnectionV2,
     ShopeeOfferConnectionV2,
     ShopOfferConnectionV2,
-    ProductOfferConnectionV2,
-    ConversionReportConnection,
+    ShortLinkResult,
     ValidatedReportConnection,
-    PartnerOrderReportConnection,
-    ItemFeedListConnection,
-    ItemFeedDataConnection,
 )
+
 
 class ShopeeAffiliateClient:
     """
     Asynchronous client for the Shopee Affiliate Open API (GraphQL).
     """
+
     BASE_URL = "https://open-api.affiliate.shopee.com.br/graphql"
 
     @staticmethod
@@ -59,7 +62,9 @@ class ShopeeAffiliateClient:
         if self._client:
             await self._client.aclose()
 
-    async def _request(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _request(
+        self, query: str, variables: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Executes a GraphQL query/mutation with proper authentication headers.
         """
@@ -69,21 +74,25 @@ class ShopeeAffiliateClient:
         payload_dict = {"query": query}
         if variables:
             payload_dict["variables"] = variables
-            
+
         # Shopee requires the payload to be exactly matching the one signed.
         # Ensure separators don't have spaces to match the most compact JSON string if that was intended,
         # but json.dumps defaults space separating. We will stick to the tightest representation.
-        payload = json.dumps(payload_dict, separators=(',', ':'))
-        
+        payload = json.dumps(payload_dict, separators=(",", ":"))
+
         headers = get_auth_headers(self.app_id, self.secret, payload)
 
-        response = await self._client.post(self.BASE_URL, headers=headers, content=payload)
-        
+        response = await self._client.post(
+            self.BASE_URL, headers=headers, content=payload
+        )
+
         if response.status_code >= 500:
-            raise ShopeeAPIError(f"Server Error {response.status_code}: {response.text}")
+            raise ShopeeAPIError(
+                f"Server Error {response.status_code}: {response.text}"
+            )
 
         data = response.json()
-        
+
         # Depending on how shopee wraps errors, sometimes there are HTTP 200 with error codes inside extensions
         if "errors" in data and len(data["errors"]) > 0:
             err = data["errors"][0]
@@ -95,12 +104,14 @@ class ShopeeAffiliateClient:
             else:
                 # Direct GraphQL error without custom Shopee extension code
                 raise ShopeeAPIError(f"GraphQL Error: {error_message}")
-                
+
         return data.get("data", {})
 
     # --- Endpoints ---
 
-    async def generate_short_link(self, origin_url: str, sub_ids: Optional[List[str]] = None) -> ShortLinkResult:
+    async def generate_short_link(
+        self, origin_url: str, sub_ids: Optional[List[str]] = None
+    ) -> ShortLinkResult:
         query = """
         mutation generateShortLink($originUrl: String!, $subIds: [String!]) {
             generateShortLink(input: {originUrl: $originUrl, subIds: $subIds}) {
@@ -116,7 +127,11 @@ class ShopeeAffiliateClient:
         return ShortLinkResult(**data.get("generateShortLink", {}))
 
     async def get_shopee_offer_list(
-        self, keyword: Optional[str] = None, sortType: int = 1, page: int = 1, limit: int = 10
+        self,
+        keyword: Optional[str] = None,
+        sortType: int = 1,
+        page: int = 1,
+        limit: int = 10,
     ) -> ShopeeOfferConnectionV2:
         query = """
         query shopeeOfferV2($keyword: String, $sortType: Int, $page: Int, $limit: Int) {
@@ -149,20 +164,25 @@ class ShopeeAffiliateClient:
         return ShopeeOfferConnectionV2(**data.get("shopeeOfferV2", {}))
 
     async def get_shop_offer_list(
-        self, 
-        page: int = 1, 
+        self,
+        page: int = 1,
         limit: int = 10,
-        keyword: Optional[str] = None, 
+        keyword: Optional[str] = None,
         shopId: Optional[int] = None,
         sortType: int = 1,
         shopType: Optional[List[int]] = None,
         isKeySeller: Optional[bool] = None,
-        sellerCommCoveRatio: Optional[str] = None
+        sellerCommCoveRatio: Optional[str] = None,
     ) -> ShopOfferConnectionV2:
         _VAR_TYPES = {
-            "keyword": "String", "shopId": "Int64", "sortType": "Int",
-            "shopType": "[Int]", "isKeySeller": "Boolean",
-            "sellerCommCoveRatio": "String", "page": "Int", "limit": "Int",
+            "keyword": "String",
+            "shopId": "Int64",
+            "sortType": "Int",
+            "shopType": "[Int]",
+            "isKeySeller": "Boolean",
+            "sellerCommCoveRatio": "String",
+            "page": "Int",
+            "limit": "Int",
         }
         _RETURN_FIELDS = """nodes {
                     commissionRate imageUrl offerLink originalLink shopId shopName
@@ -171,14 +191,20 @@ class ShopeeAffiliateClient:
                     bannerInfo { count banners { fileName imageUrl imageSize imageWidth imageHeight } }
                 }
                 pageInfo { page limit hasNextPage }"""
-        variables = {k: v for k, v in locals().items() if v is not None and k not in ("self", "_VAR_TYPES", "_RETURN_FIELDS")}
-        query = self._dynamic_query("query", "shopOfferV2", _VAR_TYPES, _RETURN_FIELDS, variables)
+        variables = {
+            k: v
+            for k, v in locals().items()
+            if v is not None and k not in ("self", "_VAR_TYPES", "_RETURN_FIELDS")
+        }
+        query = self._dynamic_query(
+            "query", "shopOfferV2", _VAR_TYPES, _RETURN_FIELDS, variables
+        )
         data = await self._request(query, variables)
         return ShopOfferConnectionV2(**data.get("shopOfferV2", {}))
 
     async def get_product_offer_list(
-        self, 
-        page: int = 1, 
+        self,
+        page: int = 1,
         limit: int = 10,
         keyword: Optional[str] = None,
         shopId: Optional[int] = None,
@@ -188,13 +214,20 @@ class ShopeeAffiliateClient:
         matchId: Optional[int] = None,
         sortType: Optional[int] = None,
         isAMSOffer: Optional[bool] = None,
-        isKeySeller: Optional[bool] = None
+        isKeySeller: Optional[bool] = None,
     ) -> ProductOfferConnectionV2:
         _VAR_TYPES = {
-            "keyword": "String", "shopId": "Int64", "itemId": "Int64",
-            "productCatId": "Int", "listType": "Int", "matchId": "Int64",
-            "sortType": "Int", "isAMSOffer": "Boolean", "isKeySeller": "Boolean",
-            "page": "Int", "limit": "Int",
+            "keyword": "String",
+            "shopId": "Int64",
+            "itemId": "Int64",
+            "productCatId": "Int",
+            "listType": "Int",
+            "matchId": "Int64",
+            "sortType": "Int",
+            "isAMSOffer": "Boolean",
+            "isKeySeller": "Boolean",
+            "page": "Int",
+            "limit": "Int",
         }
         _RETURN_FIELDS = """nodes {
                     itemId commissionRate sellerCommissionRate shopeeCommissionRate
@@ -203,8 +236,14 @@ class ShopeeAffiliateClient:
                     productLink offerLink periodStartTime periodEndTime
                 }
                 pageInfo { page limit hasNextPage }"""
-        variables = {k: v for k, v in locals().items() if v is not None and k not in ("self", "_VAR_TYPES", "_RETURN_FIELDS")}
-        query = self._dynamic_query("query", "productOfferV2", _VAR_TYPES, _RETURN_FIELDS, variables)
+        variables = {
+            k: v
+            for k, v in locals().items()
+            if v is not None and k not in ("self", "_VAR_TYPES", "_RETURN_FIELDS")
+        }
+        query = self._dynamic_query(
+            "query", "productOfferV2", _VAR_TYPES, _RETURN_FIELDS, variables
+        )
         data = await self._request(query, variables)
         return ProductOfferConnectionV2(**data.get("productOfferV2", {}))
 
@@ -232,7 +271,7 @@ class ShopeeAffiliateClient:
         campaignPartnerName: Optional[str] = None,
         campaignType: Optional[str] = None,
         limit: int = 500,
-        scrollId: Optional[str] = None
+        scrollId: Optional[str] = None,
     ) -> ConversionReportConnection:
         query = """
         query conversionReport($purchaseTimeStart: Int, $purchaseTimeEnd: Int, $completeTimeStart: Int, $completeTimeEnd: Int, $shopName: String, $shopId: Int64, $shopType: [String], $conversionId: Int64, $orderId: String, $productName: String, $productId: Int64, $categoryLv1Id: Int64, $categoryLv2Id: Int64, $categoryLv3Id: Int64, $orderStatus: String, $buyerType: String, $attributionType: String, $device: String, $fraudStatus: String, $campaignPartnerName: String, $campaignType: String, $limit: Int, $scrollId: String) {
@@ -296,7 +335,11 @@ class ShopeeAffiliateClient:
             }
         }
         """
-        variables = {k: v for k, v in locals().items() if v is not None and k not in ("self", "query")}
+        variables = {
+            k: v
+            for k, v in locals().items()
+            if v is not None and k not in ("self", "query")
+        }
         data = await self._request(query, variables)
         return ConversionReportConnection(**data.get("conversionReport", {}))
 
@@ -489,7 +532,11 @@ class ShopeeAffiliateClient:
             }
         }
         """
-        variables: Dict[str, Any] = {"datafeedId": datafeedId, "offset": offset, "limit": limit}
+        variables: Dict[str, Any] = {
+            "datafeedId": datafeedId,
+            "offset": offset,
+            "limit": limit,
+        }
         data = await self._request(query, variables)
         return ItemFeedDataConnection(**data.get("getItemFeedData", {}))
 

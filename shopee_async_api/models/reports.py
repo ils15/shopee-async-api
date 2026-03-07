@@ -1,8 +1,11 @@
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel
-from .base import PageInfo, BaseConnection
+
+from .base import BaseConnection, PageInfo
 
 # --- Validated Report ---
+
 
 class ValidatedReportOrderItem(BaseModel):
     shopId: int
@@ -34,11 +37,13 @@ class ValidatedReportOrderItem(BaseModel):
     campaignPartnerName: str
     campaignType: str
 
+
 class ValidatedReportOrder(BaseModel):
     orderId: str
     shopType: Optional[str] = None
     orderStatus: Optional[str] = None
     items: List[ValidatedReportOrderItem]
+
 
 class ValidatedReport(BaseModel):
     clickTime: int
@@ -59,10 +64,13 @@ class ValidatedReport(BaseModel):
     linkedMcnName: str
     orders: List[ValidatedReportOrder]
 
+
 class ValidatedReportConnection(BaseConnection[ValidatedReport]):
     pass
 
+
 # --- Partner Order Report ---
+
 
 class PartnerReportOrderItem(BaseModel):
     itemId: int
@@ -75,10 +83,12 @@ class PartnerReportOrderItem(BaseModel):
     actualAmount: str
     refundAmount: str
 
+
 class ExtInfo(BaseModel):
     clickId: Optional[str] = None
     videoId: Optional[str] = None
     userType: Optional[str] = None
+
 
 class PartnerOrder(BaseModel):
     orderId: int
@@ -92,17 +102,21 @@ class PartnerOrder(BaseModel):
     items: List[PartnerReportOrderItem]
     extInfo: Optional[ExtInfo] = None
 
+
 class SearchNextPageInfo(BaseModel):
     size: int
     limit: int
     searchNextToken: Optional[str] = None
     debugId: Optional[str] = None
 
+
 class PartnerOrderReportConnection(BaseModel):
     nodes: List[PartnerOrder]
     searchNextPageInfo: SearchNextPageInfo
 
+
 # --- Conversion Report ---
+
 
 class ConversionReportOrderItem(BaseModel):
     shopId: Optional[int] = None
@@ -132,11 +146,13 @@ class ConversionReportOrderItem(BaseModel):
     campaignPartnerName: Optional[str] = None
     campaignType: Optional[str] = None
 
+
 class ConversionReportOrder(BaseModel):
     orderId: str
     orderStatus: str
     shopType: Optional[str] = None
     items: List[ConversionReportOrderItem]
+
 
 class ConversionReport(BaseModel):
     purchaseTime: int
@@ -156,6 +172,7 @@ class ConversionReport(BaseModel):
     mcnManagementFee: Optional[str] = None
     netCommission: Optional[str] = None
     campaignType: Optional[str] = None
+
 
 class ConversionReportConnection(BaseConnection[ConversionReport]):
     pass

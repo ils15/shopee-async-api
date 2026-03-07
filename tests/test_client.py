@@ -1,33 +1,34 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from shopee_async_api import ShopeeAffiliateClient
-from shopee_async_api.models import (
-    ShortLinkResult,
-    BatchShortLinkResult,
-    ShopeeOfferConnectionV2,
-    ShopOfferConnectionV2,
-    ProductOfferConnectionV2,
-    ConversionReportConnection,
-    ValidatedReportConnection,
-    PartnerOrderReportConnection,
-    ItemFeedListConnection,
-    ItemFeedDataConnection,
-)
 from shopee_async_api.exceptions import (
-    ShopeeAuthError,
-    ShopeeRateLimitError,
     ShopeeAccessDeniedError,
+    ShopeeAPIError,
+    ShopeeAuthError,
+    ShopeeBindAccountError,
     ShopeeBusinessError,
     ShopeeParamsError,
-    ShopeeBindAccountError,
-    ShopeeAPIError,
+    ShopeeRateLimitError,
 )
-
+from shopee_async_api.models import (
+    BatchShortLinkResult,
+    ConversionReportConnection,
+    ItemFeedDataConnection,
+    ItemFeedListConnection,
+    PartnerOrderReportConnection,
+    ProductOfferConnectionV2,
+    ShopeeOfferConnectionV2,
+    ShopOfferConnectionV2,
+    ShortLinkResult,
+    ValidatedReportConnection,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_post(response_body: dict, status_code: int = 200):
     """Return a context-manager-compatible patch that mocks httpx.AsyncClient.post."""
@@ -49,12 +50,24 @@ def _error_body(code: int, message: str) -> dict:
 # --- generate_short_link ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_short_link_success():
-    body = {"data": {"generateShortLink": {"shortLink": "https://s.shopee.com.br/abc123", "longLink": "https://shopee.com.br/product"}}}
+    body = {
+        "data": {
+            "generateShortLink": {
+                "shortLink": "https://s.shopee.com.br/abc123",
+                "longLink": "https://shopee.com.br/product",
+            }
+        }
+    }
     with _mock_post(body) as mock_post:
-        async with ShopeeAffiliateClient(app_id="test_app", secret="test_secret") as client:
-            result = await client.generate_short_link(origin_url="https://shopee.com.br/product")
+        async with ShopeeAffiliateClient(
+            app_id="test_app", secret="test_secret"
+        ) as client:
+            result = await client.generate_short_link(
+                origin_url="https://shopee.com.br/product"
+            )
 
         assert isinstance(result, ShortLinkResult)
         assert result.shortLink == "https://s.shopee.com.br/abc123"
@@ -69,7 +82,9 @@ async def test_generate_short_link_with_sub_ids():
     body = {"data": {"generateShortLink": {"shortLink": "https://s.shopee.com.br/xyz"}}}
     with _mock_post(body):
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
-            result = await client.generate_short_link(origin_url="https://shopee.com.br/p", sub_ids=["sub1", "sub2"])
+            result = await client.generate_short_link(
+                origin_url="https://shopee.com.br/p", sub_ids=["sub1", "sub2"]
+            )
     assert result.shortLink == "https://s.shopee.com.br/xyz"
 
 
@@ -77,14 +92,27 @@ async def test_generate_short_link_with_sub_ids():
 # --- generate_batch_short_link ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_batch_short_link_success():
     body = {
         "data": {
             "generateBatchShortLink": {
                 "links": [
-                    {"originUrl": "https://shopee.com.br/p1", "shortLink": "https://s.shopee.com.br/aaa", "longLink": "", "success": True, "errorMessage": ""},
-                    {"originUrl": "https://shopee.com.br/p2", "shortLink": "https://s.shopee.com.br/bbb", "longLink": "", "success": True, "errorMessage": ""},
+                    {
+                        "originUrl": "https://shopee.com.br/p1",
+                        "shortLink": "https://s.shopee.com.br/aaa",
+                        "longLink": "",
+                        "success": True,
+                        "errorMessage": "",
+                    },
+                    {
+                        "originUrl": "https://shopee.com.br/p2",
+                        "shortLink": "https://s.shopee.com.br/bbb",
+                        "longLink": "",
+                        "success": True,
+                        "errorMessage": "",
+                    },
                 ],
                 "total": 2,
                 "successCount": 2,
@@ -93,10 +121,12 @@ async def test_generate_batch_short_link_success():
     }
     with _mock_post(body):
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
-            result = await client.generate_batch_short_link([
-                {"originUrl": "https://shopee.com.br/p1"},
-                {"originUrl": "https://shopee.com.br/p2"},
-            ])
+            result = await client.generate_batch_short_link(
+                [
+                    {"originUrl": "https://shopee.com.br/p1"},
+                    {"originUrl": "https://shopee.com.br/p2"},
+                ]
+            )
 
     assert isinstance(result, BatchShortLinkResult)
     assert result.total == 2
@@ -109,12 +139,26 @@ async def test_generate_batch_short_link_success():
 # --- get_shopee_offer_list ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_shopee_offer_list_success():
     body = {
         "data": {
             "shopeeOfferV2": {
-                "nodes": [{"commissionRate": "0.10", "imageUrl": "https://img.shopee.com", "offerLink": "https://s.shopee.com.br/x", "originalLink": "https://shopee.com.br", "offerName": "Promo Test", "offerType": 1, "categoryId": None, "collectionId": None, "periodStartTime": 0, "periodEndTime": 0}],
+                "nodes": [
+                    {
+                        "commissionRate": "0.10",
+                        "imageUrl": "https://img.shopee.com",
+                        "offerLink": "https://s.shopee.com.br/x",
+                        "originalLink": "https://shopee.com.br",
+                        "offerName": "Promo Test",
+                        "offerType": 1,
+                        "categoryId": None,
+                        "collectionId": None,
+                        "periodStartTime": 0,
+                        "periodEndTime": 0,
+                    }
+                ],
                 "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False},
             }
         }
@@ -133,12 +177,29 @@ async def test_get_shopee_offer_list_success():
 # --- get_shop_offer_list ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_shop_offer_list_success():
     body = {
         "data": {
             "shopOfferV2": {
-                "nodes": [{"commissionRate": "0.07", "imageUrl": "https://img", "offerLink": "https://link", "originalLink": "https://orig", "shopId": 123, "shopName": "Test Shop", "ratingStar": "4.9", "shopType": [2], "remainingBudget": 0, "periodStartTime": 0, "periodEndTime": 0, "sellerCommCoveRatio": "0.9", "bannerInfo": None}],
+                "nodes": [
+                    {
+                        "commissionRate": "0.07",
+                        "imageUrl": "https://img",
+                        "offerLink": "https://link",
+                        "originalLink": "https://orig",
+                        "shopId": 123,
+                        "shopName": "Test Shop",
+                        "ratingStar": "4.9",
+                        "shopType": [2],
+                        "remainingBudget": 0,
+                        "periodStartTime": 0,
+                        "periodEndTime": 0,
+                        "sellerCommCoveRatio": "0.9",
+                        "bannerInfo": None,
+                    }
+                ],
                 "pageInfo": {"page": 1, "limit": 10, "hasNextPage": True},
             }
         }
@@ -155,7 +216,14 @@ async def test_get_shop_offer_list_success():
 @pytest.mark.asyncio
 async def test_get_shop_offer_list_dynamic_query_excludes_null_shoptype():
     """shopType=[Int] must not appear in the query when not provided (avoids error 10010)."""
-    body = {"data": {"shopOfferV2": {"nodes": [], "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False}}}}
+    body = {
+        "data": {
+            "shopOfferV2": {
+                "nodes": [],
+                "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False},
+            }
+        }
+    }
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
@@ -176,20 +244,36 @@ async def test_get_shop_offer_list_dynamic_query_excludes_null_shoptype():
 # --- get_product_offer_list ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_product_offer_list_success():
     body = {
         "data": {
             "productOfferV2": {
-                "nodes": [{
-                    "itemId": 99999, "commissionRate": "0.18", "sellerCommissionRate": "0.15",
-                    "shopeeCommissionRate": "0.03", "commission": "10.0", "sales": 50,
-                    "priceMax": "89.90", "priceMin": "89.90", "productCatIds": [101],
-                    "ratingStar": "4.8", "priceDiscountRate": 10, "imageUrl": "https://img",
-                    "productName": "Test Product", "shopId": 555, "shopName": "Best Shop",
-                    "shopType": [], "productLink": "https://shopee.com.br/p",
-                    "offerLink": "https://s.shopee.com.br/y", "periodStartTime": 0, "periodEndTime": 0,
-                }],
+                "nodes": [
+                    {
+                        "itemId": 99999,
+                        "commissionRate": "0.18",
+                        "sellerCommissionRate": "0.15",
+                        "shopeeCommissionRate": "0.03",
+                        "commission": "10.0",
+                        "sales": 50,
+                        "priceMax": "89.90",
+                        "priceMin": "89.90",
+                        "productCatIds": [101],
+                        "ratingStar": "4.8",
+                        "priceDiscountRate": 10,
+                        "imageUrl": "https://img",
+                        "productName": "Test Product",
+                        "shopId": 555,
+                        "shopName": "Best Shop",
+                        "shopType": [],
+                        "productLink": "https://shopee.com.br/p",
+                        "offerLink": "https://s.shopee.com.br/y",
+                        "periodStartTime": 0,
+                        "periodEndTime": 0,
+                    }
+                ],
                 "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False},
             }
         }
@@ -206,7 +290,14 @@ async def test_get_product_offer_list_success():
 @pytest.mark.asyncio
 async def test_get_product_offer_list_dynamic_query_excludes_null_listtype():
     """listType must not appear in query when not provided (avoids error 10010)."""
-    body = {"data": {"productOfferV2": {"nodes": [], "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False}}}}
+    body = {
+        "data": {
+            "productOfferV2": {
+                "nodes": [],
+                "pageInfo": {"page": 1, "limit": 10, "hasNextPage": False},
+            }
+        }
+    }
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
@@ -226,9 +317,17 @@ async def test_get_product_offer_list_dynamic_query_excludes_null_listtype():
 # --- get_conversion_report ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_conversion_report_empty():
-    body = {"data": {"conversionReport": {"nodes": [], "pageInfo": {"limit": 500, "hasNextPage": False, "scrollId": None}}}}
+    body = {
+        "data": {
+            "conversionReport": {
+                "nodes": [],
+                "pageInfo": {"limit": 500, "hasNextPage": False, "scrollId": None},
+            }
+        }
+    }
     with _mock_post(body):
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
             result = await client.get_conversion_report(limit=500)
@@ -242,9 +341,17 @@ async def test_get_conversion_report_empty():
 # --- get_validated_report ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_validated_report_empty():
-    body = {"data": {"validatedReport": {"nodes": [], "pageInfo": {"limit": 20, "hasNextPage": False, "scrollId": None}}}}
+    body = {
+        "data": {
+            "validatedReport": {
+                "nodes": [],
+                "pageInfo": {"limit": 20, "hasNextPage": False, "scrollId": None},
+            }
+        }
+    }
     with _mock_post(body):
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
             result = await client.get_validated_report(validationId=12345)
@@ -257,9 +364,22 @@ async def test_get_validated_report_empty():
 # --- get_partner_order_report ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_partner_order_report_empty():
-    body = {"data": {"partnerOrderReport": {"nodes": [], "searchNextPageInfo": {"size": 0, "limit": 500, "searchNextToken": None, "debugId": ""}}}}
+    body = {
+        "data": {
+            "partnerOrderReport": {
+                "nodes": [],
+                "searchNextPageInfo": {
+                    "size": 0,
+                    "limit": 500,
+                    "searchNextToken": None,
+                    "debugId": "",
+                },
+            }
+        }
+    }
     with _mock_post(body):
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
             result = await client.get_partner_order_report(limit=500)
@@ -271,7 +391,19 @@ async def test_get_partner_order_report_empty():
 @pytest.mark.asyncio
 async def test_get_partner_order_report_int64_serialized_as_string():
     """purchaseTimeStart must be serialized as a string (Shopee Int64 contract)."""
-    body = {"data": {"partnerOrderReport": {"nodes": [], "searchNextPageInfo": {"size": 0, "limit": 500, "searchNextToken": None, "debugId": ""}}}}
+    body = {
+        "data": {
+            "partnerOrderReport": {
+                "nodes": [],
+                "searchNextPageInfo": {
+                    "size": 0,
+                    "limit": 500,
+                    "searchNextToken": None,
+                    "debugId": "",
+                },
+            }
+        }
+    }
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
@@ -279,9 +411,12 @@ async def test_get_partner_order_report_int64_serialized_as_string():
         mock_post.return_value = mock_resp
 
         async with ShopeeAffiliateClient(app_id="a", secret="b") as client:
-            await client.get_partner_order_report(purchaseTimeStart=1700000000, purchaseTimeEnd=1700086400)
+            await client.get_partner_order_report(
+                purchaseTimeStart=1700000000, purchaseTimeEnd=1700086400
+            )
 
         import json
+
         raw = mock_post.call_args.kwargs["content"]
         payload = json.loads(raw if isinstance(raw, str) else raw.decode())
         assert payload["variables"]["purchaseTimeStart"] == "1700000000"
@@ -292,13 +427,22 @@ async def test_get_partner_order_report_int64_serialized_as_string():
 # --- list_item_feeds ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_list_item_feeds_success():
     body = {
         "data": {
             "listItemFeeds": {
                 "feeds": [
-                    {"datafeedId": "feed_001", "referenceId": "ref_001", "datafeedName": "Full Feed", "description": "All products", "totalCount": 10000, "date": "2024-01-01", "feedMode": "FULL"},
+                    {
+                        "datafeedId": "feed_001",
+                        "referenceId": "ref_001",
+                        "datafeedName": "Full Feed",
+                        "description": "All products",
+                        "totalCount": 10000,
+                        "date": "2024-01-01",
+                        "feedMode": "FULL",
+                    },
                 ]
             }
         }
@@ -317,6 +461,7 @@ async def test_list_item_feeds_success():
 # --- get_item_feed_data ---
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_item_feed_data_success():
     body = {
@@ -324,9 +469,17 @@ async def test_get_item_feed_data_success():
             "getItemFeedData": {
                 "rows": [
                     {"columns": '["123", "Product A", "99.90"]', "updateType": "NEW"},
-                    {"columns": '["456", "Product B", "49.90"]', "updateType": "UPDATE"},
+                    {
+                        "columns": '["456", "Product B", "49.90"]',
+                        "updateType": "UPDATE",
+                    },
                 ],
-                "pageInfo": {"offset": 0, "limit": 2, "totalCount": 5000, "hasMore": True},
+                "pageInfo": {
+                    "offset": 0,
+                    "limit": 2,
+                    "totalCount": 5000,
+                    "hasMore": True,
+                },
             }
         }
     }
@@ -344,6 +497,7 @@ async def test_get_item_feed_data_success():
 # ---------------------------------------------------------------------------
 # --- Exception handling ---
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_auth_error_code_10020():
@@ -367,7 +521,9 @@ async def test_access_denied_error_code_10031():
     with _mock_post(_error_body(10031, "access deny")):
         async with ShopeeAffiliateClient(app_id="x", secret="y") as client:
             with pytest.raises(ShopeeAccessDeniedError):
-                await client.generate_batch_short_link([{"originUrl": "https://shopee.com.br/p"}])
+                await client.generate_batch_short_link(
+                    [{"originUrl": "https://shopee.com.br/p"}]
+                )
 
 
 @pytest.mark.asyncio
@@ -415,11 +571,20 @@ async def test_unknown_error_code_raises_shopee_api_error():
 # --- _dynamic_query helper ---
 # ---------------------------------------------------------------------------
 
+
 def test_dynamic_query_only_includes_provided_vars():
     client = ShopeeAffiliateClient(app_id="a", secret="b")
-    var_map = {"keyword": "String", "shopId": "Int64", "listType": "Int", "page": "Int", "limit": "Int"}
+    var_map = {
+        "keyword": "String",
+        "shopId": "Int64",
+        "listType": "Int",
+        "page": "Int",
+        "limit": "Int",
+    }
     variables = {"page": 1, "limit": 10}  # keyword, shopId, listType NOT provided
-    query = client._dynamic_query("query", "productOfferV2", var_map, "nodes { itemId }", variables)
+    query = client._dynamic_query(
+        "query", "productOfferV2", var_map, "nodes { itemId }", variables
+    )
     assert "$page: Int" in query
     assert "$limit: Int" in query
     assert "keyword" not in query
@@ -436,4 +601,3 @@ def test_dynamic_query_includes_all_when_all_provided():
     assert "$page: Int" in query
     assert "$limit: Int" in query
     assert "keyword: $keyword" in query
-

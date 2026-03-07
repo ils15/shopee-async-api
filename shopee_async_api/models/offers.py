@@ -1,8 +1,11 @@
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel
-from .base import PageInfo, BaseConnection
+
+from .base import BaseConnection, PageInfo
 
 # --- Shopee Offer V2 ---
+
 
 class ShopeeOfferV2(BaseModel):
     commissionRate: str
@@ -16,10 +19,13 @@ class ShopeeOfferV2(BaseModel):
     periodStartTime: int
     periodEndTime: int
 
+
 class ShopeeOfferConnectionV2(BaseConnection[ShopeeOfferV2]):
     pass
 
+
 # --- Shop Offer V2 ---
+
 
 class Banner(BaseModel):
     fileName: str
@@ -28,9 +34,11 @@ class Banner(BaseModel):
     imageWidth: int
     imageHeight: int
 
+
 class BannerInfo(BaseModel):
     count: int
     banners: List[Banner]
+
 
 class ShopOfferV2(BaseModel):
     commissionRate: str
@@ -47,10 +55,13 @@ class ShopOfferV2(BaseModel):
     sellerCommCoveRatio: Optional[str] = None
     bannerInfo: Optional[BannerInfo] = None
 
+
 class ShopOfferConnectionV2(BaseConnection[ShopOfferV2]):
     pass
 
+
 # --- Product Offer V2 ---
+
 
 class ProductOfferV2(BaseModel):
     itemId: int
@@ -73,6 +84,7 @@ class ProductOfferV2(BaseModel):
     offerLink: str
     periodStartTime: int
     periodEndTime: int
+
 
 class ProductOfferConnectionV2(BaseConnection[ProductOfferV2]):
     pass

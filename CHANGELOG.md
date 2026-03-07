@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CI workflows aligned with gold standard: `gpt-5-mini` classification, OIDC PyPI publishing (no API token), PR label-driven version bump
+- `publish.yml`: reads merged PR label (`enhancement`/`bug`/`refactor`) to determine bump type; fallback to commit message
+- `auto-pr.yml`: improved AI system prompt with prioritized SemVer categories and strict rules
+- `ci.yml`: style checks (`black`, `isort`, `mypy`) non-blocking via `continue-on-error`
+- `autoformat.yml`: new workflow — applies Black + isort automatically on every push and commits back
+- `bump_version.py`: accepts `BUMP_TYPE` env var from PR label as priority over commit message
+- Automatic `develop` ← `master` sync after every release (no manual pull needed)
+
 ---
 
 ## [0.2.1] - 2026-03-06

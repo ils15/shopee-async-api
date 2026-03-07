@@ -81,7 +81,7 @@ The library exports custom Pydantic-mapped exceptions so you can trap specific G
 from shopee_async_api import ShopeeAuthError, ShopeeRateLimitError
 
 try:
-    await client.generate_short_link("https://amazon.com")
+    await client.generate_short_link("https://shopee.com.br/product/123")
 except ShopeeAuthError as e:
     print("Suas credenciais estão inválidas:", e)
 except ShopeeRateLimitError as e:
