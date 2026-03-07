@@ -1,6 +1,6 @@
-# Guia de Desenvolvimento e Release — amazon-creators-async
+# Guia de Desenvolvimento e Release — shopee-async-api
 
-> Documento interno. Não publicado no GitHub (listado no `.gitignore`).
+> Documento interno.
 
 ---
 

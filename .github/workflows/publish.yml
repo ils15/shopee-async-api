@@ -113,6 +113,18 @@ jobs:
           git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
           git push origin master
 
+      # SYNC DEVELOP WITH MASTER (fast-forward)
+      - name: Sync develop with master
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge origin/master --ff-only
+          git push origin develop
+          echo "🔀 develop synced with master (fast-forward)"
+
       - name: Publish notification
         if: steps.version.outputs.should_publish == 'true'
         run: |

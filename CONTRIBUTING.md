@@ -38,7 +38,7 @@ If you add a new endpoint, please ensure:
 
 ## Submitting Pull Requests
 
-1. Fork the repository and create your branch from `main`.
+1. Fork the repository and create your branch from `develop`.
 2. Format your code using `black` and `isort`.
 3. Ensure all tests pass (`pytest`).
 4. Type hint any new functions.
