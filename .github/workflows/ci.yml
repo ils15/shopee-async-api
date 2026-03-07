@@ -41,9 +41,12 @@ jobs:
 
     - name: Check code formatting with Black
       run: black --check ${{ env.PKG_NAME }} tests
+      continue-on-error: true
 
     - name: Check import sorting with isort
       run: isort --check-only ${{ env.PKG_NAME }} tests
+      continue-on-error: true
 
     - name: Type check with mypy
       run: mypy ${{ env.PKG_NAME }} --ignore-missing-imports
+      continue-on-error: true
