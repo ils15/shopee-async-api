@@ -2,7 +2,7 @@ name: Auto Release PR (develop -> master)
 
 # Triggered on every push to develop.
 # 1. Reads the actual code diff since last master sync
-# 2. Calls GitHub Models API (gpt-4o-mini) to classify the change type
+# 2. Calls GitHub Models API (gpt-5-mini) to classify the change type
 # 3. Falls back to file-pattern heuristic if AI is unavailable
 # 4. Skips if only docs/tests/CI changed (nothing publishable)
 # 5. Creates (or updates) a PR develop -> master with label + full commit list
@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      models: read        # GitHub Models API (gpt-4o-mini)
+      models: read        # GitHub Models API (gpt-5-mini)
 
     steps:
       # --- 1. CHECKOUT ---
@@ -89,22 +89,28 @@ jobs:
           token   = os.environ.get('GH_TOKEN', '')
 
           system_prompt = (
-              "You are a semantic versioning classifier. "
-              "Analyze the git diff and respond with EXACTLY ONE WORD:\n"
-              "- feat     new public endpoint, class, or user-visible feature\n"
-              "- fix      bug fixed, wrong behaviour patched\n"
-              "- refactor internal restructuring, no change to public API\n"
-              "- breaking existing public API removed, renamed, or signature changed\n"
-              "- docs     only docs, tests, or CI files changed\n"
-              "One lowercase word. No punctuation."
+              "You are an expert CI/CD AI agent specialized in Semantic Versioning (SemVer) for Python libraries.\n"
+              "Your sole task is to analyze a git diff and commit history, then classify the change to determine the version bump.\n\n"
+              "Respond with EXACTLY ONE WORD from the list below. Do not include any punctuation, markdown formatting, or explanations.\n\n"
+              "Categories (in order of priority - always choose the highest applicable priority):\n"
+              "1. 'breaking' - Existing public API removed, renamed, or function signatures changed. Incompatible updates.\n"
+              "2. 'feat'     - New public endpoint, class, method, or user-visible feature added.\n"
+              "3. 'fix'      - Bug fixed, incorrect behavior patched, or new exception handling added.\n"
+              "4. 'refactor' - Internal code restructuring, performance improvements. No changes to the public API.\n"
+              "5. 'docs'     - ONLY documentation, tests, or CI/CD workflow files changed.\n\n"
+              "Strict Rules:\n"
+              "- If the diff contains both a bug fix and a breaking change, output 'breaking'.\n"
+              "- If the diff contains both a refactor and a new feature, output 'feat'.\n"
+              "- Pay special attention to `*.py` files. Changes to `tests/` or `.github/` without changes to core `*.py` files should be 'docs'."
           )
           user_msg = (
+              f"Analyze the following changes and provide the single-word classification.\n\n"
               f"Changed files: {', '.join(sig_files[:20])}\n\n"
-              f"Commits: {commits[:400]}\n\n"
-              f"Diff:\n{diff_code}"
+              f"Commits:\n{commits[:400]}\n\n"
+              f"Git Diff:\n{diff_code}"
           )
           payload = json.dumps({
-              "model": "gpt-4o-mini",
+              "model": "gpt-5-mini",
               "messages": [
                   {"role": "system", "content": system_prompt},
                   {"role": "user",   "content": user_msg}
@@ -126,10 +132,10 @@ jobs:
                   candidate = body['choices'][0]['message']['content'].strip().lower().split()[0]
                   if candidate in ('feat', 'fix', 'refactor', 'breaking', 'docs'):
                       ai_type = candidate
-                      source  = 'AI (gpt-4o-mini)'
+                      source  = 'AI (gpt-5-mini)'
                       print(f'::notice::AI classified change as: {ai_type}')
           except Exception as e:
-              print(f'::warning::AI classification unavailable ({e}), using heuristic')
+              print(f'::warning::AI classification unavailable ({e}), using heuristic fallback')
 
           # ---- Heuristic fallback ----
           if not ai_type:

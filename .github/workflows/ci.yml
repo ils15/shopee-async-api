@@ -13,6 +13,9 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
+    env:
+      PKG_NAME: "shopee_async_api"
+
     steps:
     - uses: actions/checkout@v4
 
@@ -28,7 +31,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest tests/ --cov=shopee_async_api --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+        pytest tests/ --cov=${{ env.PKG_NAME }} --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -37,13 +40,10 @@ jobs:
         fail_ci_if_error: false
 
     - name: Check code formatting with Black
-      run: black --check shopee_async_api tests
-      continue-on-error: true
+      run: black --check ${{ env.PKG_NAME }} tests
 
     - name: Check import sorting with isort
-      run: isort --check-only shopee_async_api tests
-      continue-on-error: true
+      run: isort --check-only ${{ env.PKG_NAME }} tests
 
     - name: Type check with mypy
-      run: mypy shopee_async_api --ignore-missing-imports
-      continue-on-error: true
+      run: mypy ${{ env.PKG_NAME }} --ignore-missing-imports

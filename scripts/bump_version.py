@@ -98,9 +98,15 @@ def update_version_in_init(new_version: str) -> None:
 
 
 def main():
+    # Priority 1: BUMP_TYPE from PR label (set by publish.yml via auto-pr label)
+    bump_type_override = os.environ.get("BUMP_TYPE", "").strip().lower()
     commit_msg = os.environ.get("GIT_COMMIT_MESSAGE", "")
 
-    bump_type = detect_bump_type(commit_msg)
+    if bump_type_override in ("major", "minor", "patch"):
+        bump_type = bump_type_override
+        print(f"📋 Bump type from PR label: {bump_type}")
+    else:
+        bump_type = detect_bump_type(commit_msg)
 
     if bump_type == "none":
         print(f"ℹ️ Skipping version bump (commit: {commit_msg[:60]!r})")
